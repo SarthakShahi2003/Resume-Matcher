@@ -1,332 +1,234 @@
-import os
-import json
-import pymupdf
-from pydantic import BaseModel
-from dotenv import load_dotenv
-from groq import Groq
+# AI Resume Matcher 🤖
 
+An AI-powered application that analyzes a candidate's resume against a job description and calculates a matching percentage based on skills, work experience, and educational qualifications.
 
-# Defines the information we want to extract from the resume.
-class ResumeDetails(BaseModel):
-    name: str
-    skills: list[str]
-    experience: list[str]
-    education: list[str]
+The project uses a Large Language Model (LLM) through the Groq API to extract structured information from resumes and job descriptions, then applies a Python-based matching algorithm to generate a detailed evaluation report.
 
+## 🚀 Project Overview
 
-# Defines the requirements we want to extract from HR's description.
-class JobRequirements(BaseModel):
-    required_skills: list[str]
-    required_experience_years: float | None = None
-    required_education: list[str]
+Recruiters often spend significant time reviewing resumes to identify candidates who meet specific job requirements. This project aims to simplify the process by automating resume analysis and job requirement matching.
 
+The application extracts relevant information from a PDF resume, analyzes a job description, compares the candidate's profile against the required qualifications, and generates an overall matching score.
 
-# Opens the PDF resume.
-doc = pymupdf.open("DataBricks Resume.pdf")
+## ✨ Features
 
-# Extracts text from every page and combines it into one string.
-resume_text = "\n".join(
-    page.get_text() for page in doc
-)
+* **PDF Resume Parsing:** Extracts text from PDF resumes using PyMuPDF.
+* **AI-Powered Resume Analysis:** Uses an LLM to extract the candidate's name, skills, experience, and education.
+* **Job Description Analysis:** Extracts required skills, experience, and educational qualifications from a job description.
+* **Structured Data Validation:** Uses Pydantic models to validate extracted information.
+* **Skill Matching:** Identifies matched and missing skills using case-insensitive text matching.
+* **Experience Matching:** Estimates relevant work experience and compares it with job requirements.
+* **Education Matching:** Compares the candidate's educational qualifications with the required qualifications.
+* **Weighted Scoring:** Calculates an overall matching percentage using configurable weights.
+* **Detailed Matching Report:** Displays individual scores, matched skills, missing skills, and the overall result.
 
-# Closes the PDF after extracting its text.
-doc.close()
+## 🛠️ Tech Stack
 
+| Technology         | Purpose                                       |
+| ------------------ | --------------------------------------------- |
+| Python             | Core application logic and matching algorithm |
+| Groq API           | Access to the language model                  |
+| OpenAI GPT-OSS 20B | Model used for information extraction         |
+| PyMuPDF            | PDF text extraction                           |
+| Pydantic           | Data modeling and validation                  |
+| python-dotenv      | Environment variable management               |
+| JSON               | Structured data exchange                      |
 
-# Loads the API key from the .env file.
-load_dotenv()
+## ⚙️ How It Works
 
-# Reads the Groq API key from environment variables.
-my_api_key = os.getenv("GROQ_API_KEY")
+The application follows these steps:
 
-# Stops the program if the API key is missing.
-if not my_api_key:
-    raise ValueError("Groq API key is missing!")
+**1. Resume Parsing**
 
-# Creates the Groq client to communicate with the AI model.
-client = Groq(api_key=my_api_key)
-model = "openai/gpt-oss-20b"
+PyMuPDF extracts text from every page of the candidate's PDF resume and combines it into a single text string.
 
+**2. Resume Information Extraction**
 
-# RESUME EXTRACTION
+The extracted text is sent to the language model through the Groq API. The model identifies the candidate's name, skills, experience, and education and returns the information in JSON format.
 
-# Converts the Pydantic model into a schema for the AI to follow.
-schema = ResumeDetails.model_json_schema()
+**3. Job Requirement Extraction**
 
-# Tells the AI what information to extract from the resume.
-system_prompt = f"""
-Extract the candidate's name, skills, experience, and education
-from the resume.
+The job description is sent to the model in a separate API request. The model extracts the required skills, years of experience, and educational qualifications.
 
-Return the extracted information as a valid JSON object.
+**4. Data Validation**
 
-Rules:
-- Use only information present in the resume.
-- Do not invent missing details.
-- Return an empty list if skills, experience, or education are missing.
-- Return an empty string if the name is missing.
+Pydantic models validate the structure of the extracted information before it is passed to the matching engine.
 
-Follow this JSON schema:
-{schema}
-"""
+**5. Skill Matching**
 
-# Sends the instructions and resume text to the AI.
-messages = [
-    {
-        "role": "system",
-        "content": system_prompt
-    },
-    {
-        "role": "user",
-        "content": resume_text
-    }
-]
+The application normalizes skill names and compares the candidate's skills with the required skills. It identifies matching skills and skills that were not found.
 
-# Requests the AI to return its answer in JSON format.
-response = client.chat.completions.create(
-    model=model,
-    messages=messages,
-    response_format={"type": "json_object"}
-)
+**6. Experience Matching**
 
-# Extracts the JSON text from the AI's response.
-answer = response.choices[0].message.content
+The language model estimates the candidate's relevant experience from the available resume information. Python then calculates an experience score by comparing the estimate with the job's experience requirement.
 
-# Converts the JSON text into a Python dictionary.
-data = json.loads(answer)
+**7. Education Matching**
 
-# Validates the extracted data and creates a ResumeDetails object.
-resume_details = ResumeDetails.model_validate(data)
+The application performs basic text-based matching between the candidate's educational qualifications and the job requirements.
 
-# Displays the extracted resume information.
-print("\n--- Extracted Resume Details ---")
-print(resume_details.model_dump_json(indent=2))
+**8. Overall Score Calculation**
 
+The individual scores are combined using a weighted average to generate an overall matching percentage.
 
-# HR JOB REQUIREMENTS EXTRACTION
+**9. Report Generation**
 
-# Sample job description provided by HR.
-job_description = """
-Job Title: AI Engineer
+The application prints a report containing the overall match, individual scores, matched skills, missing skills, and available experience and education results.
 
-Required Skills:
-Python, SQL, Machine Learning, LangChain, RAG
-
-Required Experience: 2 years
+## 📊 Matching Algorithm
 
-Education: Bachelor's degree in Computer Science
-"""
-
-# Converts the JobRequirements model into a schema for the AI to follow.
-job_schema = JobRequirements.model_json_schema()
-
-# Tells the AI to extract the requirements mentioned in the job description.
-job_system_prompt = f"""
-Extract the required skills, experience, and education
-from the job description.
-
-Return the information as a valid JSON object.
-
-Rules:
-- Extract only requirements mentioned in the description.
-- Do not invent missing requirements.
-- If experience is not specified, return null.
-- If skills or education are not specified, return an empty list.
-
-Follow this JSON schema:
-{job_schema}
-"""
-
-# Sends the instructions and job description to the AI.
-job_messages = [
-    {
-        "role": "system",
-        "content": job_system_prompt
-    },
-    {
-        "role": "user",
-        "content": job_description
-    }
-]
-
-# Requests the extracted job requirements in JSON format.
-job_response = client.chat.completions.create(
-    model=model,
-    messages=job_messages,
-    response_format={"type": "json_object"}
-)
-
-# Extracts the JSON text returned by the AI.
-job_answer = job_response.choices[0].message.content
-
-# Converts the JSON text into a Python dictionary.
-job_data = json.loads(job_answer)
-
-# Validates the extracted data and creates a JobRequirements object.
-job_requirements = JobRequirements.model_validate(job_data)
-
-# Displays the extracted job requirements.
-print("\n--- Extracted Job Requirements ---")
-print(job_requirements.model_dump_json(indent=2))
-
-
-# RESUME MATCHING ENGINE
-
-# Converts skill names to lowercase and removes extra spaces for comparison.
-candidate_skills = {
-    skill.strip().casefold()
-    for skill in resume_details.skills
-}
-
-required_skills = {
-    skill.strip().casefold()
-    for skill in job_requirements.required_skills
-}
-
-# Finds which required skills are present in the resume.
-matched_skills = candidate_skills.intersection(required_skills)
-missing_skills = required_skills - candidate_skills
-
-# Calculates the percentage of required skills found in the resume.
-if required_skills:
-    skill_score = len(matched_skills) / len(required_skills) * 100
-else:
-    skill_score = None
-
-
-# Asks the AI to estimate relevant experience using the resume evidence.
-experience_prompt = f"""
-Estimate the candidate's relevant work experience in years for this job.
-
-Job requirements:
-{job_description}
-
-Resume experience:
-{resume_details.experience}
-
-Rules:
-- Use only the provided resume evidence.
-- Do not count unrelated experience as relevant.
-- If the duration cannot be determined, return null.
-- Return only a JSON object with the key "experience_years".
-- The value must be a number or null.
-"""
-
-experience_response = client.chat.completions.create(
-    model=model,
-    messages=[
-        {
-            "role": "system",
-            "content": experience_prompt
-        },
-        {
-            "role": "user",
-            "content": "Estimate the candidate's relevant experience."
-        }
-    ],
-    response_format={"type": "json_object"}
-)
-
-# Reads the estimated experience; missing or unclear duration remains unknown.
-experience_data = json.loads(
-    experience_response.choices[0].message.content
-)
-
-candidate_experience = experience_data.get("experience_years")
-required_experience = job_requirements.required_experience_years
-
-# Calculates the experience score only when both values are available.
-if (
-    candidate_experience is not None
-    and required_experience is not None
-    and required_experience > 0
-):
-    experience_score = min(
-        candidate_experience / required_experience, 1
-    ) * 100
-elif required_experience == 0:
-    experience_score = 100
-else:
-    experience_score = None
-
-
-# Compares education using simple text matching.
-candidate_education = " ".join(
-    item.casefold() for item in resume_details.education
-)
-
-if not job_requirements.required_education:
-    education_score = None
-else:
-    # Checks whether any required qualification has a matching phrase.
-    education_matches = any(
-        requirement.casefold() in candidate_education
-        or candidate_education in requirement.casefold()
-        for requirement in job_requirements.required_education
-        if candidate_education
-    )
-
-    education_score = 100 if education_matches else 0
-
-
-# Combines available scores using their weights.
-weights = {
-    "skills": 0.60,
-    "experience": 0.25,
-    "education": 0.15
-}
-
-scores = {
-    "skills": skill_score,
-    "experience": experience_score,
-    "education": education_score
-}
-
-# Excludes unknown scores and adjusts the weights proportionally.
-available_weight = sum(
-    weights[category]
-    for category, score in scores.items()
-    if score is not None
-)
-
-if available_weight:
-    overall_score = sum(
-        weights[category] * score
-        for category, score in scores.items()
-        if score is not None
-    ) / available_weight
-else:
-    overall_score = None
-
-
-# FINAL MATCHING REPORT
-
-print("\n========== RESUME MATCHING REPORT ==========")
-print(f"Candidate: {resume_details.name}")
-
-if overall_score is not None:
-    print(f"Overall Match: {overall_score:.2f}%")
-else:
-    print("Overall Match: Cannot be calculated")
-
-if skill_score is not None:
-    print(f"\nSkill Match: {skill_score:.2f}%")
-    print(f"Matched Skills: {len(matched_skills)} out of {len(required_skills)}")
-    print("Matched:", ", ".join(sorted(matched_skills)) or "None")
-    print("Not found:", ", ".join(sorted(missing_skills)) or "None")
-else:
-    print("\nSkill Match: No required skills were provided")
-
-if experience_score is not None:
-    print(f"\nExperience Match: {experience_score:.2f}%")
-    print(f"Required Experience: {required_experience} years")
-    print(f"Estimated Relevant Experience: {candidate_experience} years")
-else:
-    print("\nExperience Match: Unable to verify")
-
-if education_score is not None:
-    print(f"\nEducation Match: {education_score:.2f}%")
-else:
-    print("\nEducation Match: Unable to verify")
-
-print("============================================")
+The application evaluates candidates across three categories.
+
+| Category   |   Weight |
+| ---------- | -------: |
+| Skills     |      60% |
+| Experience |      25% |
+| Education  |      15% |
+| **Total**  | **100%** |
+
+### Skill Matching
+
+The skill score is calculated as:
+
+`Skill Score = (Matched Skills / Required Skills) × 100`
+
+For example, if a job requires five skills and three are found in the resume, the skill matching score is 60%.
+
+### Experience Matching
+
+The experience score is calculated as:
+
+`Experience Score = min(Candidate Experience / Required Experience, 1) × 100`
+
+The score is capped at 100%. If the available information is insufficient to calculate a score, the category is excluded from the overall calculation.
+
+### Education Matching
+
+Education is evaluated using basic text matching. A matching qualification receives a score of 100%, while an unmatched qualification receives 0%. If no education requirement is provided, the score is treated as unavailable.
+
+### Overall Matching Score
+
+The overall score is a weighted average of the available category scores. If a category cannot be evaluated, its weight is excluded and the remaining weights are adjusted proportionally.
+
+**Note:** These weights are configurable design choices. The matching percentage represents the result of the implemented scoring rules, not the probability of being hired.
+
+## 📁 Project Structure
+
+```text
+resume_matcher/
+│
+├── main.py                 # Main application and matching engine
+├── DataBricks Resume.pdf   # Sample PDF resume for testing
+├── .env                    # Groq API key (excluded from GitHub)
+├── .gitignore              # Files excluded from version control
+├── pyproject.toml          # Project configuration and dependencies
+├── uv.lock                 # Locked dependency versions
+└── README.md               # Project documentation
+```
+
+## 💻 Installation and Setup
+
+### Prerequisites
+
+* Python 3.12 or a compatible Python version
+* [uv](https://docs.astral.sh/uv/) package manager
+* A Groq API key
+
+### 1. Clone the Repository
+
+```bash
+git clone https://github.com/YOUR_USERNAME/resume-matcher.git
+cd resume-matcher
+```
+
+Replace `YOUR_USERNAME` and `resume-matcher` with your GitHub username and repository name.
+
+### 2. Install Dependencies
+
+```bash
+uv sync
+```
+
+### 3. Configure the API Key
+
+Create a `.env` file in the project root and add:
+
+```env
+GROQ_API_KEY=your_groq_api_key
+```
+
+Replace the placeholder with your actual Groq API key.
+
+**Security:** Never upload your `.env` file or expose your API key in a public repository.
+
+### 4. Add a Resume
+
+Place a PDF resume in the project directory.
+
+The current implementation expects the filename:
+
+```text
+DataBricks Resume.pdf
+```
+
+If you use a different filename, update the corresponding path in `main.py`.
+
+### 5. Run the Application
+
+```bash
+uv run python main.py
+```
+
+The application will extract resume information, analyze the job requirements, calculate matching scores, and display the final report in the terminal.
+
+The current version uses a job description defined directly in `main.py`.
+
+## ⚠️ Current Limitations
+
+* The application currently supports PDF resumes with extractable text.
+* The resume filename and job description are hardcoded.
+* Skill matching relies on exact normalized text rather than semantic similarity.
+* Education matching uses basic text comparison.
+* Relevant work experience is estimated by an LLM and may be inaccurate.
+* Extracted information is validated structurally but is not independently verified against every resume claim.
+* The application currently provides a terminal-based interface.
+
+## 🔮 Future Improvements
+
+* [ ] Build a Streamlit web interface.
+* [ ] Allow users to upload resumes and paste job descriptions.
+* [ ] Add support for Word documents (DOCX).
+* [ ] Improve skill matching using aliases and semantic similarity.
+* [ ] Improve education matching and qualification normalization.
+* [ ] Calculate experience using structured employment dates.
+* [ ] Provide evidence for extracted skills and qualifications.
+* [ ] Generate personalized resume improvement suggestions.
+* [ ] Add unit tests and improved error handling.
+* [ ] Support evaluation of multiple candidates.
+
+## 🎯 Learning Outcomes
+
+Through this project, I explored:
+
+* Integrating LLMs into Python applications using APIs.
+* Prompt engineering for structured information extraction.
+* PDF processing with PyMuPDF.
+* Working with JSON and Python data structures.
+* Data validation using Pydantic.
+* Managing API credentials with environment variables.
+* Implementing rule-based matching algorithms.
+* Calculating weighted scores and handling unavailable data.
+* Combining LLM-based text interpretation with deterministic Python logic.
+
+## 🛡️ Responsible Use
+
+AI-generated resume analysis may contain errors or omissions. Matching results should be reviewed by a human and should not be used as the sole basis for employment decisions.
+
+Only process resumes you are authorized to use, and avoid sharing confidential candidate information with external services without appropriate authorization.
+
+## 📄 License
+
+No license has been specified yet. Add an appropriate open-source license if you intend to permit others to use, modify, and distribute this project.
+
+---
+
+**Developed using Python, Groq API, Pydantic, and PyMuPDF.**
